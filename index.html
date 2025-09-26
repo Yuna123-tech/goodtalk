@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>말글맘 챌린지: 우리반 행복 보드게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;700&family=Dongle:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background-color: #f0f9ff; /* 매우 연한 하늘색 배경 */
+        }
+        .font-dongle {
+            font-family: 'Dongle', sans-serif;
+        }
+        /* 게임 보드 스타일 */
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            grid-template-rows: repeat(5, 1fr);
+            gap: 8px;
+            width: 100%;
+            max-width: 800px;
+            height: 550px;
+            position: relative;
+        }
+        .board-space {
+            border: 2px solid #60a5fa; /* 파란색 테두리 */
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: #1e3a8a;
+            background-color: #dbeafe; /* 연한 파란색 */
+            position: relative;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+        .board-space:hover {
+            transform: scale(1.05);
+        }
+        /* 보드 경로 설정 */
+        .path { background-color: #bfdbfe; }
+        .start { background-color: #4ade80; color: white; font-size: 1.2rem; } /* 초록색 시작 */
+        .finish { background-color: #f87171; color: white; font-size: 1.2rem; } /* 빨간색 도착 */
+        .mal-card { border-color: #facc15; background-color: #fef9c3; } /* 노란색 '말' 카드 */
+        .geul-card { border-color: #34d399; background-color: #d1fae5; } /* 초록색 '글' 카드 */
+        .mam-card { border-color: #fb923c; background-color: #ffedd5; } /* 주황색 '맘' 카드 */
+        
+        /* 플레이어 말 스타일 (크기 조정) */
+        .player-piece {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            position: absolute;
+            transition: all 0.5s ease-in-out;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        /* 모달 스타일 */
+        .modal-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .modal-content {
+            background-color: white;
+            padding: 30px;
+            border-radius: 20px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            border-top: 10px solid;
+        }
+        #drawing-canvas {
+            border: 2px dashed #ccc;
+            border-radius: 10px;
+            cursor: crosshair;
+        }
+
+        /* 주사위 애니메이션 */
+        @keyframes roll {
+            0% { transform: rotate(0deg) scale(1); }
+            25% { transform: rotate(180deg) scale(1.2); }
+            50% { transform: rotate(360deg) scale(1); }
+            75% { transform: rotate(540deg) scale(1.2); }
+            100% { transform: rotate(720deg) scale(1); }
+        }
+        .rolling {
+            animation: roll 0.7s ease-in-out;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <audio id="bgm" loop>
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-6">
+            <h1 class="text-5xl md:text-6xl font-bold text-blue-600 font-dongle">말글맘 챌린지</h1>
+            <p class="text-lg text-gray-600 mt-2">우리반 행복을 만드는 디지털 보드게임</p>
+        </header>
+
+        <div id="start-screen" class="text-center p-8 bg-white rounded-2xl shadow-lg">
+            <h2 class="text-3xl font-bold text-blue-500 mb-4">어떻게 플레이할까요?</h2>
+            <div class="flex justify-center gap-6 mb-6">
+                <label class="flex items-center gap-2 p-3 border-2 border-blue-500 rounded-lg cursor-pointer">
+                    <input type="radio" name="game-mode" value="team" checked class="w-5 h-5">
+                    <span class="font-bold text-lg">모둠 대항전</span>
+                </label>
+                <label class="flex items-center gap-2 p-3 border-2 border-gray-300 rounded-lg cursor-pointer">
+                    <input type="radio" name="game-mode" value="individual" class="w-5 h-5">
+                    <span class="font-bold text-lg">개인전</span>
+                </label>
+            </div>
+            <div class="mb-4">
+                <label for="participant-count" id="participant-label" class="font-bold text-lg">모둠 수 선택 (2~12개):</label>
+                <input type="number" id="participant-count" value="4" min="2" max="12" class="ml-2 w-20 p-2 border rounded-lg text-center">
+            </div>
+            <button id="start-game-btn" class="bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-8 rounded-full text-xl transition-transform transform hover:scale-105">
+                챌린지 시작!
+            </button>
+        </div>
+
+        <main id="game-container" class="hidden">
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div class="flex-grow flex justify-center items-center">
+                    <div id="game-board" class="game-board"></div>
+                </div>
+                <div class="lg:w-1/4 bg-white p-6 rounded-2xl shadow-lg">
+                    <h2 class="text-2xl font-bold text-center mb-4 text-blue-800">게임 현황</h2>
+                    <div id="turn-indicator" class="text-center mb-4 p-3 rounded-lg text-white font-bold text-lg"></div>
+                    <div id="team-scores" class="space-y-2 mb-6"></div>
+                    <div class="text-center">
+                        <div id="dice-container" class="w-24 h-24 mx-auto mb-4 bg-white border-4 border-gray-300 rounded-2xl flex items-center justify-center text-5xl font-bold shadow-inner">
+                            <span id="dice-face">🎲</span>
+                        </div>
+                        <button id="roll-dice-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-8 rounded-full text-xl transition-transform transform hover:scale-105 w-full">
+                            주사위 굴리기
+                        </button>
+                        <button id="home-btn" class="mt-4 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-full text-md w-full">
+                            처음으로
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 갤러리 영역은 이제 숨겨져서 JS 데이터 저장용으로만 사용됩니다 -->
+            <div id="gallery-storage" class="hidden">
+                <div id="gallery"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 미션 모달 -->
+    <div id="mission-modal" class="modal-backdrop hidden">
+        <div id="modal-content" class="modal-content">
+            <h2 id="modal-title" class="text-4xl font-bold mb-4 font-dongle">미션 카드</h2>
+            <div id="modal-body" class="text-lg"></div>
+            <div class="mt-6">
+                <button id="fail-mission-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-6 rounded-full mr-2">
+                    미션 실패
+                </button>
+                <button id="close-modal-btn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-full">
+                    미션 완료
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 최종 결과 모달 -->
+    <div id="final-modal" class="modal-backdrop hidden">
+        <div class="modal-content border-yellow-400">
+             <h2 class="text-4xl font-bold mb-4 text-yellow-500 font-dongle">🎉 챌린지 완료! 🎉</h2>
+             <p class="text-lg mb-4">우리반 모두의 힘으로 행복 에너지를 가득 채웠어요!<br>아래에서 우리가 만든 소중한 작품들을 저장할 수 있어요.</p>
+             <div id="final-slideshow" class="bg-gray-100 p-4 rounded-lg h-64 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-4"></div>
+             <p class="mt-4 text-sm text-gray-600">※ 이 작품들을 모아 '말글맘 캠페인송'에 맞춰<br>멋진 '우리반 말글맘 영상'을 만들어 보세요!</p>
+             <button onclick="location.reload()" class="mt-6 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-full">
+                다시하기
+            </button>
+        </div>
+    </div>
+
+    <!-- NEW: 처음으로 돌아가기 확인 모달 -->
+    <div id="confirm-home-modal" class="modal-backdrop hidden">
+        <div class="modal-content border-red-400">
+             <h2 class="text-3xl font-bold mb-4 text-red-500">정말 처음으로 돌아갈까요?</h2>
+             <p class="text-lg mb-6">지금까지 진행한 내용은 모두 사라집니다.</p>
+             <div class="flex justify-center gap-4">
+                 <button id="cancel-home-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-8 rounded-full">
+                    취소
+                </button>
+                <button id="confirm-home-btn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-8 rounded-full">
+                    돌아가기
+                </button>
+             </div>
+        </div>
+    </div>
+
+    <script>
+        // 게임 설정 및 상태 변수
+        const boardSpaces = 24;
+        const boardPath = [1, 2, 3, 4, 5, 6, 13, 12, 11, 10, 9, 8, 15, 16, 17, 18, 19, 20, 27, 26, 25, 24, 23, 22];
+        const teamColors = ['#ef4444', '#3b82f6', '#22c55e', '#f97316', '#8b5cf6', '#ec4899', '#10b981', '#64748b', '#f59e0b', '#06b6d4', '#d946ef', '#65a30d'];
+        
+        let gameState = {
+            teams: [],
+            currentTurn: 0,
+            gameActive: false,
+            gameMode: 'team', // 'team' or 'individual'
+        };
+
+        const missions = [
+            { type: '말', content: "친구에게 들었던 말 중에 가장 기분 좋았던 말을 발표해 보세요." },
+            { type: '글', content: "학교에서 찾을 수 있는 '좋은 글귀'를 사진 찍고, 왜 좋은지 한 문장으로 적어 제출해주세요." },
+            { type: '맘', content: "'고마워!' 하는 마음을 담은 이모티콘을 그려서 제출해주세요." },
+            { type: '말', content: "내가 친구에게 무심코 했던 말 중 후회되는 것이 있다면? 앞으로 어떻게 말할 건지 다짐을 발표해요." },
+            { type: '맘', content: "'힘내!'라고 응원하는 표정의 캐릭터를 그려서 제출해주세요." },
+            { type: '글', content: "우리 반 친구의 웃는 모습을 사진 찍고, '웃음은 최고의 행복!' 같은 멋진 표어를 붙여 제출해주세요." },
+            { type: '말', content: "'말글맘 캠페인송' 가사 중 가장 마음에 드는 부분을 골라 그 이유를 설명해 보세요." },
+            { type: '글', content: "우리 교실에서 가장 따뜻함이 느껴지는 공간을 사진 찍고, 그 이유를 적어 제출해주세요." },
+            { type: '맘', content: "'미안해'라는 마음을 표현하는 이모티콘을 그려서 제출해주세요." },
+            { type: '말', content: "친구가 슬퍼 보일 때 어떤 말을 해주면 좋을지 역할극으로 보여주세요." },
+            { type: '글', content: "서로 돕는 친구들의 모습을 사진으로 찍고, '함께하면 더 강해져!' 라는 문구를 넣어 제출해주세요." },
+            { type: '맘', content: "'최고야!'라고 칭찬하는 동작의 캐릭터를 그려 제출해주세요." },
+            { type: '말', content: "가족에게 가장 힘이 되었던 말은 무엇이었나요? 경험을 이야기해 봅시다." },
+            { type: '맘', content: "'같이 놀자!'고 말하는 표정의 이모티콘을 그려 제출해주세요." },
+            { type: '글', content: "활짝 핀 꽃 사진을 찍고, '너의 마음도 활짝'이라는 글을 써서 제출해주세요." },
+            { type: '말', content: "인터넷에서 나쁜 말을 봤을 때 어떻게 대처해야 할지 이야기해 보세요." },
+            { type: '글', content: "질서있게 줄을 선 모습을 사진 찍고, '질서는 아름다워'라는 표어를 붙여 제출해주세요." },
+            { type: '맘', content: "'축하해!' 기뻐하는 마음을 담은 이모티콘을 그려 제출해주세요." },
+            { type: '말', content: "칭찬은 왜 중요할까요? 우리 모둠의 생각을 정리해서 발표해 보세요." },
+            { type: '글', content: "맑은 하늘 사진을 찍고, '오늘 하루도 맑음!'이라는 글을 써서 제출해주세요." },
+            { type: '맘', content: "'괜찮아'라고 위로하는 따뜻한 표정의 캐릭터를 그려 제출해주세요." },
+            { type: '말', content: "'고맙습니다', '미안합니다', '사랑합니다'를 언제 사용해야 할지 이야기 나눠요." },
+            { type: '글', content: "선생님께 감사한 마음을 담아 손글씨 편지를 쓰고, 사진으로 찍어 제출해주세요." },
+            { type: '맘', content: "'행복'이라는 감정을 나만의 캐릭터로 표현해서 제출해주세요." },
+        ];
+
+        const domElements = {
+            startScreen: document.getElementById('start-screen'),
+            gameContainer: document.getElementById('game-container'),
+            startGameBtn: document.getElementById('start-game-btn'),
+            participantCountInput: document.getElementById('participant-count'),
+            participantLabel: document.getElementById('participant-label'),
+            gameModeRadios: document.querySelectorAll('input[name="game-mode"]'),
+            gameBoard: document.getElementById('game-board'),
+            turnIndicator: document.getElementById('turn-indicator'),
+            teamScoresContainer: document.getElementById('team-scores'),
+            diceFace: document.getElementById('dice-face'),
+            rollDiceBtn: document.getElementById('roll-dice-btn'),
+            modal: document.getElementById('mission-modal'),
+            modalContent: document.getElementById('modal-content'),
+            modalTitle: document.getElementById('modal-title'),
+            modalBody: document.getElementById('modal-body'),
+            closeModalBtn: document.getElementById('close-modal-btn'),
+            failMissionBtn: document.getElementById('fail-mission-btn'),
+            bgm: document.getElementById('bgm'),
+            gallery: document.getElementById('gallery'),
+            finalModal: document.getElementById('final-modal'),
+            finalSlideshow: document.getElementById('final-slideshow'),
+            // NEW: 처음으로 돌아가기 모달 요소
+            homeBtn: document.getElementById('home-btn'),
+            confirmHomeModal: document.getElementById('confirm-home-modal'),
+            cancelHomeBtn: document.getElementById('cancel-home-btn'),
+            confirmHomeBtn: document.getElementById('confirm-home-btn'),
+        };
+
+        // NEW: 처음으로 돌아가기 버튼 이벤트 리스너
+        domElements.homeBtn.addEventListener('click', () => {
+            domElements.confirmHomeModal.classList.remove('hidden');
+        });
+        domElements.cancelHomeBtn.addEventListener('click', () => {
+            domElements.confirmHomeModal.classList.add('hidden');
+        });
+        domElements.confirmHomeBtn.addEventListener('click', () => {
+            location.reload();
+        });
+
+        domElements.gameModeRadios.forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                document.querySelectorAll('input[name="game-mode"]').forEach(r => {
+                    r.parentElement.classList.remove('border-blue-500');
+                    r.parentElement.classList.add('border-gray-300');
+                });
+                e.target.parentElement.classList.add('border-blue-500');
+                e.target.parentElement.classList.remove('border-gray-300');
+
+                if (e.target.value === 'team') {
+                    domElements.participantLabel.textContent = '모둠 수 선택 (2~12개):';
+                    domElements.participantCountInput.max = '12';
+                    domElements.participantCountInput.value = '4';
+                } else {
+                    domElements.participantLabel.textContent = '플레이어 수 선택 (2~12명):';
+                    domElements.participantCountInput.max = '12';
+                    domElements.participantCountInput.value = '4';
+                }
+            });
+        });
+
+        domElements.startGameBtn.addEventListener('click', () => {
+            gameState.gameMode = document.querySelector('input[name="game-mode"]:checked').value;
+            const participantCount = parseInt(domElements.participantCountInput.value);
+            const maxCount = parseInt(domElements.participantCountInput.max);
+            
+            if (participantCount >= 2 && participantCount <= maxCount) {
+                initializeGame(participantCount);
+                domElements.startScreen.classList.add('hidden');
+                domElements.gameContainer.classList.remove('hidden');
+                domElements.bgm.play().catch(e => console.log("BGM 자동 재생 실패. 사용자 상호작용이 필요합니다."));
+            } else {
+                alert(`참가자 수는 2에서 ${maxCount} 사이로 입력해주세요.`);
+            }
+        });
+
+        function initializeGame(participantCount) {
+            gameState.teams = [];
+            const namePrefix = gameState.gameMode === 'team' ? '모둠' : '플레이어';
+            for (let i = 0; i < participantCount; i++) {
+                gameState.teams.push({
+                    id: i,
+                    name: `${i + 1}${namePrefix}`,
+                    position: 0,
+                    previousPosition: 0,
+                    color: teamColors[i],
+                });
+            }
+            gameState.currentTurn = 0;
+            gameState.gameActive = true;
+            createBoard();
+            createPlayerPieces();
+            updateTeamScores();
+            updateTurnIndicator();
+        }
+
+        function createBoard() {
+            domElements.gameBoard.innerHTML = '';
+            let boardGrid = Array(35).fill(null);
+            
+            boardPath.forEach((gridIndex, pathIndex) => {
+                const mission = missions[pathIndex];
+                let cardType = '';
+                if (mission) {
+                    if (mission.type === '말') cardType = 'mal-card';
+                    else if (mission.type === '글') cardType = 'geul-card';
+                    else if (mission.type === '맘') cardType = 'mam-card';
+                }
+                boardGrid[gridIndex] = `<div id="space-${pathIndex + 1}" class="board-space path ${cardType}"><span>${pathIndex + 1}</span></div>`;
+            });
+            boardGrid[boardPath[0]] = `<div id="space-1" class="board-space start"><span>시작</span></div>`;
+            boardGrid[boardPath[boardPath.length - 1]] = `<div id="space-${boardPath.length}" class="board-space finish"><span>도착</span></div>`;
+            
+            for (let i = 0; i < 35; i++) {
+                domElements.gameBoard.innerHTML += boardGrid[i] ? boardGrid[i] : '<div></div>';
+            }
+        }
+
+        function createPlayerPieces() {
+            gameState.teams.forEach(team => {
+                const piece = document.createElement('div');
+                piece.id = `player-${team.id}`;
+                piece.className = 'player-piece';
+                piece.style.backgroundColor = team.color;
+                piece.innerText = team.id + 1;
+                domElements.gameBoard.appendChild(piece);
+                updatePiecePosition(team.id);
+            });
+        }
+        
+        function updatePiecePosition(teamId) {
+            const team = gameState.teams[teamId];
+            const piece = document.getElementById(`player-${team.id}`);
+            const targetSpace = document.getElementById(`space-${team.position}`);
+            
+            if (targetSpace) {
+                const positions = calculatePositions(gameState.teams.length, team.id);
+                piece.style.left = `${targetSpace.offsetLeft + positions.x}px`;
+                piece.style.top = `${targetSpace.offsetTop + positions.y}px`;
+            }
+        }
+        
+        function calculatePositions(total, index) {
+            const R = 20; // Radius from center
+            const angle = (index / total) * 2 * Math.PI;
+            const x = 30 + R * Math.cos(angle);
+            const y = 30 + R * Math.sin(angle);
+            return {x,y};
+        }
+
+        function updateTeamScores() {
+            domElements.teamScoresContainer.innerHTML = '';
+            gameState.teams.forEach(team => {
+                const teamDiv = document.createElement('div');
+                teamDiv.className = 'flex items-center justify-between p-2 rounded-lg';
+                teamDiv.style.backgroundColor = `${team.color}20`;
+                teamDiv.innerHTML = `
+                    <span class="font-bold" style="color: ${team.color};">${team.name}</span>
+                    <span class="text-sm text-gray-700">${team.position} / ${boardSpaces} 칸</span>
+                `;
+                domElements.teamScoresContainer.appendChild(teamDiv);
+            });
+        }
+
+        function updateTurnIndicator() {
+            const currentTeam = gameState.teams[gameState.currentTurn];
+            domElements.turnIndicator.textContent = `${currentTeam.name} 차례`;
+            domElements.turnIndicator.style.backgroundColor = currentTeam.color;
+            domElements.rollDiceBtn.disabled = false;
+        }
+
+        domElements.rollDiceBtn.addEventListener('click', () => {
+            if (!gameState.gameActive) return;
+            domElements.rollDiceBtn.disabled = true;
+
+            const diceResult = Math.floor(Math.random() * 6) + 1;
+            
+            domElements.diceFace.parentElement.classList.add('rolling');
+            setTimeout(() => {
+                domElements.diceFace.textContent = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][diceResult - 1];
+                domElements.diceFace.parentElement.classList.remove('rolling');
+                movePlayer(diceResult);
+            }, 700);
+        });
+
+        function movePlayer(steps) {
+            const team = gameState.teams[gameState.currentTurn];
+            team.previousPosition = team.position;
+            team.position += steps;
+
+            if (team.position >= boardSpaces) {
+                team.position = boardSpaces;
+                updatePiecePosition(team.id);
+                updateTeamScores();
+                endGame(team);
+                return;
+            }
+
+            updatePiecePosition(team.id);
+            updateTeamScores();
+
+            setTimeout(() => {
+                showMission(team.position - 1);
+            }, 500);
+        }
+
+        function showMission(missionIndex) {
+            const mission = missions[missionIndex];
+            if (!mission) {
+                nextTurn();
+                return;
+            }
+
+            domElements.modal.classList.remove('hidden');
+            domElements.modalTitle.textContent = `"${mission.type.toUpperCase()}" 미션 카드`;
+            
+            let modalBodyHTML = `<p class="mb-4">${mission.content}</p>`;
+
+            if (mission.type === '글') {
+                modalBodyHTML += `
+                    <div class="mt-4 border-t pt-4">
+                        <input type="file" id="photo-upload" accept="image/*" class="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100 mb-2"/>
+                        <input type="text" id="photo-caption" placeholder="사진에 대한 한 문장 표어를 적어주세요." class="w-full p-2 border rounded-md">
+                        <button id="submit-photo" class="mt-2 bg-emerald-500 text-white py-2 px-4 rounded-md">작품 제출하기</button>
+                        <p class="text-xs text-gray-500 mt-2">제출한 작품은 게임이 끝나고 한번에 저장할 수 있어요.</p>
+                    </div>`;
+            } else if (mission.type === '맘') {
+                modalBodyHTML += `
+                    <div class="mt-4 border-t pt-4">
+                        <canvas id="drawing-canvas" width="300" height="200" class="mx-auto bg-white"></canvas>
+                         <div class="mt-2">
+                             <input type="color" id="color-picker" value="#000000">
+                             <button id="clear-canvas" class="text-sm py-1 px-2 border rounded">지우기</button>
+                         </div>
+                        <button id="submit-drawing" class="mt-2 bg-orange-500 text-white py-2 px-4 rounded-md">작품 제출하기</button>
+                        <p class="text-xs text-gray-500 mt-2">제출한 작품은 게임이 끝나고 한번에 저장할 수 있어요.</p>
+                    </div>`;
+            }
+            
+            domElements.modalBody.innerHTML = modalBodyHTML;
+            
+            const typeColors = { '말': '#facc15', '글': '#34d399', '맘': '#fb923c' };
+            domElements.modalContent.style.borderColor = typeColors[mission.type];
+
+            if (mission.type === '글') {
+                document.getElementById('submit-photo').onclick = submitPhoto;
+            } else if (mission.type === '맘') {
+                setupCanvas();
+                document.getElementById('submit-drawing').onclick = submitDrawing;
+            }
+        }
+        
+        domElements.closeModalBtn.addEventListener('click', () => {
+            domElements.modal.classList.add('hidden');
+            nextTurn();
+        });
+        
+        domElements.failMissionBtn.addEventListener('click', () => {
+            const team = gameState.teams[gameState.currentTurn];
+            team.position = team.previousPosition;
+            updatePiecePosition(team.id);
+            updateTeamScores();
+            alert(`${team.name}이/가 미션을 해결하지 못해 원래 자리로 돌아갑니다.`);
+            domElements.modal.classList.add('hidden');
+            nextTurn();
+        });
+
+        function nextTurn() {
+            gameState.currentTurn = (gameState.currentTurn + 1) % gameState.teams.length;
+            updateTurnIndicator();
+        }
+
+        function submitPhoto() {
+            const photoInput = document.getElementById('photo-upload');
+            const captionInput = document.getElementById('photo-caption');
+            if (photoInput.files.length > 0 && captionInput.value) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    addGalleryItem('글', { src: e.target.result, caption: captionInput.value });
+                }
+                reader.readAsDataURL(photoInput.files[0]);
+                alert('작품이 임시 저장되었습니다!');
+            } else {
+                alert('사진과 표어를 모두 입력해주세요.');
+            }
+        }
+
+        function submitDrawing() {
+            const canvas = document.getElementById('drawing-canvas');
+            const dataUrl = canvas.toDataURL('image/png');
+            addGalleryItem('맘', { src: dataUrl, caption: "우리의 마음 이모티콘" });
+            alert('작품이 임시 저장되었습니다!');
+        }
+        
+        function addGalleryItem(type, data) {
+            const item = document.createElement('div');
+            item.dataset.src = data.src;
+            item.dataset.caption = data.caption;
+            item.dataset.type = type;
+            domElements.gallery.appendChild(item);
+        }
+
+        function setupCanvas() {
+            const canvas = document.getElementById('drawing-canvas');
+            const ctx = canvas.getContext('2d');
+            let drawing = false;
+            
+            const colorPicker = document.getElementById('color-picker');
+            const clearBtn = document.getElementById('clear-canvas');
+
+            const getPos = (evt, isTouch = false) => {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = isTouch ? evt.touches[0].clientX : evt.clientX;
+                const clientY = isTouch ? evt.touches[0].clientY : evt.clientY;
+                return { x: clientX - rect.left, y: clientY - rect.top };
+            };
+
+            const startDrawing = (e) => {
+                drawing = true;
+                const pos = getPos(e, e.type === 'touchstart');
+                ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+                if (e.type === 'touchstart') e.preventDefault();
+            };
+            const stopDrawing = (e) => {
+                drawing = false;
+                if (e.type === 'touchend') e.preventDefault();
+            };
+            const draw = (e) => {
+                if (!drawing) return;
+                const pos = getPos(e, e.type === 'touchmove');
+                ctx.lineWidth = 3; ctx.lineCap = 'round';
+                ctx.strokeStyle = colorPicker.value;
+                ctx.lineTo(pos.x, pos.y); ctx.stroke();
+                if (e.type === 'touchmove') e.preventDefault();
+            };
+
+            canvas.addEventListener('mousedown', startDrawing);
+            canvas.addEventListener('mouseup', stopDrawing);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('touchstart', startDrawing);
+            canvas.addEventListener('touchend', stopDrawing);
+            canvas.addEventListener('touchmove', draw);
+            
+            clearBtn.onclick = () => ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function endGame(winner) {
+            gameState.gameActive = false;
+            domElements.finalSlideshow.innerHTML = '';
+            
+            const galleryItems = domElements.gallery.querySelectorAll('div');
+            galleryItems.forEach((item, index) => {
+                const slideItem = document.createElement('div');
+                slideItem.className = 'relative group';
+                const fileType = item.dataset.type === '맘' ? 'png' : 'jpg';
+
+                slideItem.innerHTML = `
+                    <img src="${item.dataset.src}" class="w-full h-32 object-cover rounded-md">
+                    <a href="${item.dataset.src}" download="말글맘_작품_${index + 1}.${fileType}" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                        저장하기
+                    </a>
+                `;
+                domElements.finalSlideshow.appendChild(slideItem);
+            });
+            
+            setTimeout(() => {
+                domElements.finalModal.classList.remove('hidden');
+            }, 1000);
+        }
+    </script>
+</body>
+</html>
+
+
