@@ -334,14 +334,18 @@
         });
 
         function initializeGame(participantCount) {
+            // NEW: Clear previous session data on new game start
+            sessionStorage.removeItem('galleryItems'); 
+            domElements.gallery.innerHTML = ''; // Clear visual gallery storage element
+
             gameState.teams = [];
             const namePrefix = gameState.gameMode === 'team' ? '모둠' : '플레이어';
             for (let i = 0; i < participantCount; i++) {
                 gameState.teams.push({
                     id: i,
                     name: `${i + 1}${namePrefix}`,
-                    position: 0,
-                    previousPosition: 0,
+                    position: 1, // Start at space 1
+                    previousPosition: 1, // Start at space 1
                     color: teamColors[i],
                 });
             }
@@ -400,10 +404,10 @@
         }
         
         function calculatePositions(total, index) {
-            const R = 20; // Radius from center
+            const R = 22; // Radius from center for larger pieces
             const angle = (index / total) * 2 * Math.PI;
-            const x = 30 + R * Math.cos(angle);
-            const y = 30 + R * Math.sin(angle);
+            const x = 40 + R * Math.cos(angle);
+            const y = 40 + R * Math.sin(angle);
             return {x,y};
         }
 
@@ -552,11 +556,17 @@
         }
         
         function addGalleryItem(type, data) {
+            // This visual element is no longer the primary storage
             const item = document.createElement('div');
             item.dataset.src = data.src;
             item.dataset.caption = data.caption;
             item.dataset.type = type;
             domElements.gallery.appendChild(item);
+
+            // NEW: Save to sessionStorage for persistence during the session
+            const galleryItems = JSON.parse(sessionStorage.getItem('galleryItems')) || [];
+            galleryItems.push({ type, src: data.src, caption: data.caption });
+            sessionStorage.setItem('galleryItems', JSON.stringify(galleryItems));
         }
 
         function setupCanvas() {
@@ -607,15 +617,17 @@
             gameState.gameActive = false;
             domElements.finalSlideshow.innerHTML = '';
             
-            const galleryItems = domElements.gallery.querySelectorAll('div');
+            // NEW: Load items from sessionStorage to build the final slideshow
+            const galleryItems = JSON.parse(sessionStorage.getItem('galleryItems')) || [];
+
             galleryItems.forEach((item, index) => {
                 const slideItem = document.createElement('div');
                 slideItem.className = 'relative group';
-                const fileType = item.dataset.type === '맘' ? 'png' : 'jpg';
+                const fileType = item.type === '맘' ? 'png' : 'jpg';
 
                 slideItem.innerHTML = `
-                    <img src="${item.dataset.src}" class="w-full h-32 object-cover rounded-md">
-                    <a href="${item.dataset.src}" download="말글맘_작품_${index + 1}.${fileType}" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
+                    <img src="${item.src}" class="w-full h-32 object-cover rounded-md">
+                    <a href="${item.src}" download="말글맘_작품_${index + 1}.${fileType}" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity rounded-md">
                         저장하기
                     </a>
                 `;
@@ -629,5 +641,4 @@
     </script>
 </body>
 </html>
-
 
